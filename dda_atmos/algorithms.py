@@ -240,7 +240,6 @@ def dda_eeasm_part1(data, heights, dem,
         kernal_args2={}, density_args2={},
         min_cluster_size=300, remove_clusters_in_pass=False,
         fill_clouds_with_noise=True, noise_altitude=10000,
-
         verbose=False):
     '''Function that allows for the pre-calculation of everything required for the second threshold determination step in the DDA.
     
@@ -271,10 +270,14 @@ def dda_eeasm_part1(data, heights, dem,
 
     return {'kernal1': kernal1, 'kernal2':kernal2,
             'density1':density1, 'density2':density2,
-            'thresholds1': thresholds1, 'cloud_mask1': cloud_mask1}
+            'thresholds1': thresholds1, 'cloud_mask1': cloud_mask1,
+            'data_mask':data_mask}
 
 
-def dda_eeasm_part2_mpl(data, heights, dem, firstpass_data):
+def dda_eeasm_part2_mpl(data, heights, dem, firstpass_dat,
+                        threshold_args2,
+                        min_cluster_size=300, remove_clusters_in_pass=False,
+                        verbose=False):
     '''Function to implement the second half of the analysis, where the second threshold calculation is made and then the proceeding analysis.
     
     INPUTS:
@@ -282,4 +285,69 @@ def dda_eeasm_part2_mpl(data, heights, dem, firstpass_data):
     OUTPUTS:
     
     '''
-    raise NotImplementedError()
+    density2 = firstpass_dat['density2']
+    data_mask = firstpass_dat['data_mask']
+    cloud_mask1 = firstpass_dat['cloud_mask1']
+
+    thresholds2 = steps.calc_threshold(density2, data_mask, **threshold_args2, verbose=verbose)
+    if remove_clusters_in_pass:
+        cloud_mask2 = steps.calc_cloud_mask(density2,thresholds2,data_mask, remove_small_clusters=min_cluster_size, verbose=verbose)
+    else:
+        cloud_mask2 = steps.calc_cloud_mask(density2,thresholds2,data_mask, verbose=verbose)
+    # create the combined cloud_mask variable
+    cloud_mask_combined = steps.combine_masks((cloud_mask1,cloud_mask2), remove_small_clusters=min_cluster_size, verbose=verbose)
+    
+    postproc = dda_postprocess(cloud_mask_combined, heights, verbose)
+
+    return {'thresholds2':thresholds2, 'cloud_mask2':cloud_mask2,
+            'cloud_mask_combined': cloud_mask_combined}, postproc
+
+
+def dda_remove_ground(density1, cloud_mask, heights, dem, dem_tol, ground_width, verbose=False):
+    '''Function with minimal requirements to remove a ground signal from the generated cloud mask.
+    
+    INPUTS:
+    
+    OUTPUTS:
+    
+    '''
+    if verbose: print('******** Finding ground signal')
+    # determine within which signal bins the ground lies
+    (ground_bin, ground_height) = steps.get_ground_bin(density1, cloud_mask, heights, dem, dem_tol, verbose=verbose)
+
+    layer_mask_with_ground = steps.combine_layers_from_mask_vectorized(cloud_mask, verbose=verbose)
+
+    if verbose: print('******** Removing ground from signal')
+    # remove the ground bins from cloud_mask
+    cloud_mask_no_ground, ground_mask = steps.remove_ground_from_mask(layer_mask_with_ground, ground_bin,cloud_mask,ground_width,heights, verbose=verbose)
+
+    return {'ground_height':ground_height, 
+            'groubnd_mask':ground_mask, 
+            'cloud_mask_no_ground':cloud_mask_no_ground}
+
+
+def dda_postprocess(cloud_mask, heights, verbose=False):
+    '''Function to implement the post-processing steps of the DDA, after the final cloud mask has been generated.
+    
+    INPUTS:
+        cloud_mask: np.ndarray
+            (n,m) boolean array containing 1s for cloudy pixels and 0s for non-cloudy pixels.
+            
+        heights: np.ndarray
+            (m,) numpy array containing the heights for each of the vertical bins. Must be ordered.
+            
+        verbose: bool
+            Flag for printing statements.
+            
+    OUTPUTS:
+    '''
+    # create a new layer_mask with the ground signal removed
+    layer_mask = steps.combine_layers_from_mask(cloud_mask, verbose=verbose)
+
+    if verbose: print('******** Calculating layer boundaries')
+    num_cloud_layers, layer_bot, layer_top = steps.get_layer_boundaries(layer_mask, heights, verbose=verbose)
+
+    return {'num_cloud_layers':num_cloud_layers, 
+            'layer_bot':layer_bot, 
+            'layer_top':layer_top,
+            'layer_mask':layer_mask}
