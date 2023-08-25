@@ -60,7 +60,6 @@ def calc_threshold(density, data_mask=None, downsample=0, segment_length=5, bias
     return thresholds
 
 
-
 @numba.jit(nopython=True)
 def _threshold_loop(n_prof, downsample, segment_length, downsample_matrix, quantile, bias, sensitivity):
     '''Function to implement threshoold calculation loop with Numba JIT compillation
@@ -109,13 +108,14 @@ def _threshold_loop(n_prof, downsample, segment_length, downsample_matrix, quant
     return thresholds
 
 
-
 def calc_threshold_vectorized(density, data_mask=None, downsample=0, segment_length=5, bias=60, sensitivity=1, quantile=90, verbose=False, **kwargs):
     '''Function to calculate the threshold values for cloud pixels in each vertical profile of the density field.
     
     This function represents the synthesis of methods A and B in the ATL04/09 ATBD part 2 [https://doi.org/10.5067/48PJ5OUJOP4C]. The default arguments are for method B (although the bias and sensitivity values likely need changing for MPL data)
 
     This version of the function is vectorized to improve speed of execution. It will however, be more memory intensive.
+
+    !!!!!!IT ALSO DOESN'T SPEED UP EXECUTION. DO NOT USE!!!!!!
 
     INPUTS:
         density : np.ndarray
@@ -159,11 +159,25 @@ def calc_threshold_vectorized(density, data_mask=None, downsample=0, segment_len
     thresholds = np.zeros(n_prof)
 
     if verbose: print('Creating denity_stacked.')
+    
+    thresholds = _threshold_loop_vec(downsample, segment_length, n_prof, n_vert, downsample_matrix, bias, sensitivity, quantile)
+
+    thresholds = np.expand_dims(thresholds,axis=-1) # set the shape to (n,1) rather than (n,) for broadcasting when calculating cloud_mask
+    return thresholds
+
+
+@numba.jit()
+def _threshold_loop_vec(downsample, segment_length, n_prof, n_vert, downsample_matrix, bias, sensitivity, quantile):
+    '''Function to implement the vectorised threshold calculation logic, with numbe JIT compilation.
+    
+    INPUTS:
+        see calc_thredhold_vectorized()
+    OUTPUTS:'''
     delta = 2*downsample+1
     pad_vals = np.arange(-segment_length,segment_length+1)*delta
     # create the large data array to store all the values for the window
     density_stacked = np.zeros((n_prof, (2*segment_length+1)*n_vert))
-    if verbose: print(f'{density_stacked.shape=}')
+    #if verbose: print(f'{density_stacked.shape=}')
 
     for i, pad in enumerate(pad_vals):
         if pad < 0: # left pad for pad less than zero
@@ -174,10 +188,7 @@ def calc_threshold_vectorized(density, data_mask=None, downsample=0, segment_len
         density_stacked[:, i*n_vert:(i+1)*n_vert] = pad_mat
 
     thresholds = bias + sensitivity* np.nanquantile(density_stacked,quantile/100,axis=1)
-
-    thresholds = np.expand_dims(thresholds,axis=-1) # set the shape to (n,1) rather than (n,) for broadcasting when calculating cloud_mask
     return thresholds
-
 
 
 #@numba.jit(nopython=True)
