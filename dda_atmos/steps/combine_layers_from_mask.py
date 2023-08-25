@@ -5,6 +5,7 @@ The function to perform the up- and down-passes on the consolidated cloud mask t
 '''
 
 import numpy as np
+import numba
 
 def combine_layers_from_mask(cloud_mask, min_depth=3, min_sep=3, verbose=False):
     '''Function to perform up- and down-passes on cloud_mask to create layers with the minimum depth and separation.
@@ -31,10 +32,19 @@ def combine_layers_from_mask(cloud_mask, min_depth=3, min_sep=3, verbose=False):
     buffer = np.max([min_depth,min_sep])
     layer_mask = np.zeros_like(cloud_mask)
 
+    layer_mask = _perform_up_down_pass(cloud_mask, buffer, min_depth, min_sep, n_vert)
+
+    return layer_mask
+
+
+@numba.njit()
+def _perform_up_down_pass(cloud_mask, buffer, min_depth, min_sep, n_vert):
+    '''Function to implement the up- and down-passes of the cloud mask with numba JIT optimisation.'''
+    layer_mask = np.zeros_like(cloud_mask)
     for i, profile in enumerate(cloud_mask):
         # for each vertical profile
-        cm_up = np.zeros_like(profile).astype(bool) # cloud masks that will be consolidated
-        cm_down = np.zeros_like(profile).astype(bool)
+        cm_up = np.zeros(profile.shape, dtype=numba.types.bool_) # cloud masks that will be consolidated
+        cm_down = np.zeros(profile.shape, dtype=numba.types.bool_)
 
         #upwards pass
         inCloud = False
@@ -67,8 +77,10 @@ def combine_layers_from_mask(cloud_mask, min_depth=3, min_sep=3, verbose=False):
         # we now combine the up and down pass to consolidate the cloud layers
         cm = np.logical_or(cm_up,cm_down)
         layer_mask[i,:] = cm
-
+    
     return layer_mask
+
+
 
 
 def combine_layers_from_mask_vectorized(cloud_mask, min_depth=3, min_sep=3, verbose=False):
@@ -93,34 +105,41 @@ def combine_layers_from_mask_vectorized(cloud_mask, min_depth=3, min_sep=3, verb
             nxm numpy array containing 1s for cloudy pixels and 0s for non-cloudy pixels. This has cloud layers of a minimum thickness and layers with a minimum separation.
     '''
     if verbose: print('==== dda.steps.combine_layers_from_mask_vectorized()')
+    layer_mask = _perform_up_down_pass_vec(cloud_mask, min_depth, min_sep)
+    return layer_mask
+
+@numba.njit()
+def _perform_up_down_pass_vec(cloud_mask, min_depth, min_sep):
+    '''Function to implement the vectorised up- and down- passes with numba JIT optimisation'''
     (n_prof, n_vert) = cloud_mask.shape
-    buffer = np.max([min_depth,min_sep])
+    buffer = np.max(np.array([min_depth,min_sep]))
 
     layer_mask = np.zeros_like(cloud_mask)
     cm_up = np.zeros_like(cloud_mask)
     cm_down = np.zeros_like(cloud_mask)
 
-    inCloud = np.zeros((n_prof,)).astype(bool)
+    inCloud = np.zeros((n_prof,),dtype=numba.types.bool_)
     # perform the up-pass
-    if verbose: print('Performing up-pass.')
+    #if verbose: print('Performing up-pass.')
     for j in range(n_vert-buffer):
-        cloud_mask_layer = cloud_mask[:,j].squeeze()
+        cloud_mask_layer = cloud_mask[:,j]#.squeeze()
     
-        change_in = ((1 - inCloud) * cloud_mask_layer * np.all(cloud_mask[:,j:j+min_depth] == 1, axis=1).squeeze()).astype(bool)
-        change_out = ((1 - cloud_mask_layer) * inCloud * np.all(cloud_mask[:,j:j+min_sep] == 0, axis=1).squeeze()).astype(bool)
+        # transpositions are done to avoid axis=1 argument in np.all call when using JIT
+        change_in = ((1 - inCloud) * cloud_mask_layer * np.transpose(np.all(np.transpose(np.array(cloud_mask[:,j:j+min_depth]) == 1))).astype(numba.types.bool_))#.squeeze())
+        change_out = ((1 - cloud_mask_layer) * inCloud * np.transpose(np.all(np.transpose(cloud_mask[:,j:j+min_sep]) == 0)).astype(numba.types.bool_))#.squeeze())
         inCloud = np.logical_xor(inCloud, change_out) + change_in
         cm_up[:,j] = inCloud
     
-    inCloud = np.zeros((n_prof,)).astype(bool)
+    inCloud = np.zeros((n_prof,),dtype=numba.types.bool_)
     # perform the down-pass
-    if verbose: print('Performing down-pass.')
+    #if verbose: print('Performing down-pass.')
     for j in range(n_vert-1,buffer-1,-1):
         cloud_mask_layer = cloud_mask[:,j].squeeze()
 
-        change_in = ((1-inCloud) * cloud_mask_layer * np.all(cloud_mask[:,j-min_depth+1:j+1] == 1, axis=1).squeeze())
-        change_out = ((1-cloud_mask_layer) * inCloud * np.all(cloud_mask[:,j-min_sep+1:j+1] == 0, axis=1).squeeze())
+        change_in = ((1-inCloud) * cloud_mask_layer * np.all(cloud_mask[:,j-min_depth+1:j+1] == 1, axis=1))#.squeeze())
+        change_out = ((1-cloud_mask_layer) * inCloud * np.all(cloud_mask[:,j-min_sep+1:j+1] == 0, axis=1))#.squeeze())
         inCloud = inCloud + change_in - change_out
-        inCloud = inCloud.astype(bool)
+        inCloud = inCloud.astype(numba.types.bool_)
         cm_down[:,j] = inCloud
 
     layer_mask = np.logical_or(cm_up,cm_down)
