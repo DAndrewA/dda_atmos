@@ -5,7 +5,8 @@ Function to calculate the density field from data and a data mask.
 '''
 
 import numpy as np
-from scipy.signal import convolve2d
+import numba
+from scipy.signal import convolve2d as scipy_convolve2d
 
 def calc_density(data, data_mask, kernal, density_args, verbose=False):
     '''Function to calculate the density field from data and a data_mask using the provided kernal.
@@ -61,11 +62,99 @@ def convolve_masked(data, mask, kernal, **kwargs):
         if arg in kwargs:
             convargs[arg] = kwargs[arg]
 
-    norm = convolve2d(~mask, kernal, **convargs)
+    norm = scipy_convolve2d(~mask, kernal, **convargs)
     masked_data = data.copy()
     masked_data[mask] = 0
-    density = convolve2d(masked_data,kernal, **convargs)
+    density = scipy_convolve2d(masked_data,kernal, **convargs)
 
     # normalise density field
     density[norm>0] = density[norm>0] / norm[norm>0]
     return density
+
+
+
+def convolve2d(data, kernal, boundary='fill', fillvalue=0):
+    '''Function to handle the convolution in 2d, with pre-processing of the input data to account for boundary conditions.
+    
+    INPUTS:
+        data: np.ndarray
+            (n,m)
+
+        kernal: np.ndarray
+            (nk,mk)
+
+        boundary: str {'fill', 'wrap', 'symm'}, optional
+
+        fillvalue: float, optional
+
+    OUTPUTS:
+        conv: np.ndarray
+            (n,m)
+    '''
+    (n,m) = data.shape
+    (nk,mk) = kernal.shape
+    dn = int(nk//2+1)
+    dm = int(mk//2+1)
+    new_data = np.zeros((n+nk, m+mk), dtype=data.dtype)
+    if boundary == 'fill':
+        new_data[:] = fillvalue
+    elif boundary == 'wrap':
+        new_data[:dn, :dm] = data[n-dn:, m-dm:]
+        new_data[:dn, dm:dm+m] = data[n-dn:, :]
+        new_data[:dn, dm+m:] = data[n-dn:, :dm]
+
+        new_data[n+dn:, :dm] = data[:dn, m-dm:]
+        new_data[n+dn:, dm:dm+m] = data[:dn, :]
+        new_data[n+dn:, dm+m:] = data[:dn, :dm]
+
+        new_data[dn:dn+n, :dm] = data[:, m-dm:]
+        new_data[dn:dn+n, dm+m:] = data[:, :dm]
+    elif boundary == 'symm':
+        new_data[:dn, :dm] = data[:dn:-1, :dm:-1]
+        new_data[:dn, dm:dm+m] = data[:dn:-1, :]
+        new_data[:dn, dm+m:] = data[:dn:-1, m-dm::-1]
+
+        new_data[n+dn:, :dm] = data[n-dn::-1, :dm:-1]
+        new_data[n+dn:, dm:dm+m] = data[n-dn::-1, :]
+        new_data[n+dn:, dm+m:] = data[n-dn::-1, m-dm::-1]
+
+        new_data[dn:dn+n, :dm] = data[:, :dm:-1]
+        new_data[dn:dn+n, dm+m:] = data[:, m-dm::-1]
+
+    new_data[dn: dn+n, dm:dm+m] = data
+    conv = perform_conv(new_data, kernal)
+    return conv
+
+
+@numba.jit(nopython=True)
+def perform_conv(data, kernal):
+    '''Function to perform a 2d convolution of data with a kernal.
+    
+    It is expected that both the inputs will be 2d numpy ndarrays, and that data.size >= kernal.size on all dims.
+
+    In this function, the convolution is only calculated for where the kernal and data fully overlap, so the returned numpy array will be smaller than data.
+    
+    INPUTS:
+        data: np.ndarray
+            (n,m) numpy array containing the pre-processed data for convolving
+
+        kernal: np.ndarray
+            (nk,mk) numpy array where nk<=n, mk<=m, defining the kernal for use in the convolution.
+
+    OUTPUTS:
+        conv: np.ndarray
+            (n-nk, m-mk) numpy array containing the convolved data, where boundary effects aren't included. Boundaries can be allowed in the convolution via pre-processing data.
+    '''
+    new_kernal = np.flip(kernal)
+    (n,m) = data.shape
+    (nk,mk) = kernal.shape
+
+    conv = np.zeros((n-nk, m-mk),dtype=data.dtype)
+
+    for i, row in enumerate(conv):
+        for j, cval in enumerate(row):
+            for k, krow in enumerate(new_kernal):
+                for l, kval in enumerate(krow):
+                    conv[i,j] += data[i+k+1, j+l+1] * kval
+
+    return conv
