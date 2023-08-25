@@ -5,6 +5,7 @@ The function to perform the up- and down-passes on the consolidated cloud mask t
 '''
 
 import numpy as np
+import numba
 
 def combine_layers_from_mask(cloud_mask, min_depth=3, min_sep=3, verbose=False):
     '''Function to perform up- and down-passes on cloud_mask to create layers with the minimum depth and separation.
@@ -31,10 +32,19 @@ def combine_layers_from_mask(cloud_mask, min_depth=3, min_sep=3, verbose=False):
     buffer = np.max([min_depth,min_sep])
     layer_mask = np.zeros_like(cloud_mask)
 
+    layer_mask = _perform_up_down_pass(cloud_mask, buffer, min_depth, min_sep, n_vert)
+
+    return layer_mask
+
+
+@numba.njit()
+def _perform_up_down_pass(cloud_mask, buffer, min_depth, min_sep, n_vert):
+    '''Function to implement the up- and down-passes of the cloud mask with numba JIT optimisation.'''
+    layer_mask = np.zeros_like(cloud_mask)
     for i, profile in enumerate(cloud_mask):
         # for each vertical profile
-        cm_up = np.zeros_like(profile).astype(bool) # cloud masks that will be consolidated
-        cm_down = np.zeros_like(profile).astype(bool)
+        cm_up = np.zeros(profile.shape, dtype=numba.types.bool_) # cloud masks that will be consolidated
+        cm_down = np.zeros(profile.shape, dtype=numba.types.bool_)
 
         #upwards pass
         inCloud = False
@@ -67,8 +77,9 @@ def combine_layers_from_mask(cloud_mask, min_depth=3, min_sep=3, verbose=False):
         # we now combine the up and down pass to consolidate the cloud layers
         cm = np.logical_or(cm_up,cm_down)
         layer_mask[i,:] = cm
-
+    
     return layer_mask
+
 
 
 def combine_layers_from_mask_vectorized(cloud_mask, min_depth=3, min_sep=3, verbose=False):
