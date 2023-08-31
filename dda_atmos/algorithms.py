@@ -300,7 +300,7 @@ def dda_eeasm_part2_mpl(data, heights, dem, firstpass_dat,
     postproc = dda_postprocess(cloud_mask_combined, heights, verbose)
 
     return {'thresholds2':thresholds2, 'cloud_mask2':cloud_mask2,
-            'cloud_mask_combined': cloud_mask_combined}, postproc
+            'cloud_mask_combined': cloud_mask_combined, **postproc}
 
 
 def dda_remove_ground(density1, cloud_mask, heights, dem, dem_tol, ground_width, verbose=False):
