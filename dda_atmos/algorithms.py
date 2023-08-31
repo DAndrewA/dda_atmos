@@ -274,7 +274,7 @@ def dda_eeasm_part1(data, heights, dem,
             'data_mask':data_mask}
 
 
-def dda_eeasm_part2_mpl(data, heights, dem, firstpass_dat,
+def dda_eeasm_part2_mpl(firstpass_dat, heights,
                         threshold_args2,
                         min_cluster_size=300, remove_clusters_in_pass=False,
                         verbose=False):
