@@ -1,0 +1,6 @@
+DASK:
+(13, 13) (25, 13)
+starting client
+Dask computation time: 13.639567613601685
+<Client: 'inproc://172.17.2.28/103222/1' processes=1 threads=4, memory=20.00 GiB>
+Completion time: 45 s
