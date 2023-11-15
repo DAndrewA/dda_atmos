@@ -136,3 +136,22 @@ def combine_layers_from_mask_vectorized(cloud_mask, min_depth=3, min_sep=3, verb
 
     layer_mask = np.logical_or(cm_up,cm_down)
     return layer_mask
+
+
+def ch_combine_layers_from_mask(min_depth=3, min_sep=3):
+    '''Function to return a function handle to combine the cloud mask layers on chunked dask arrays
+    
+    INPUTS:
+        min_depth : int
+            The minimum number of pixels a cloud layer can contain.
+
+        min_sep : int
+            The minimum number of pixels that can seperate two cloud layers.
+    
+    OUTPUTS:
+        tfunc: function handle
+            Function handle to be passed to dask.array.map_blocks
+    '''
+    def tfunc(ch_cloud_mask):
+        return combine_layers_from_mask(ch_cloud_mask, min_depth, min_sep, verbose=False)
+    return tfunc

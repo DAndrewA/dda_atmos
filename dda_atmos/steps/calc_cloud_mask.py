@@ -40,3 +40,21 @@ def calc_cloud_mask(density, threshold, data_mask=None, remove_small_clusters=0,
         cloud_mask = remove_small_objects(cloud_mask,min_size=remove_small_clusters)
 
     return cloud_mask
+
+
+def ch_clac_cloud_mask(remove_small_clusters=0):
+    '''Function that returns a function handle to calculate the cloud mask on chunked dask arrays
+
+    NOTE: map_blocks should contain the argument {dtype=bool} to ensure the correct data type
+    
+    INPUTS:
+        remove_small_clusters : int
+            Variable denoting how big the minimum cluster size can be in the mask. If a connected cluster of masked pixels (clouds) are smaller than this value, they will be removed according to skimage.morphology.remove_small_objects. If 0, no clusters are removed.
+    
+    OUTPUTS:
+        tfunc: function handle
+            Function handle to be passed to dask.array.map_blocks
+    '''
+    def tfunc(ch_density, ch_threshold, ch_mask):
+        return calc_cloud_mask(ch_density, ch_threshold, ch_mask, remove_small_clusters, verbose=False)
+    return tfunc

@@ -227,3 +227,21 @@ def _downsample_matrix(density,downsample, verbose=False):
                 downsample_matrix[xx,yy] = np.nanmax(density[ileft:iright,ibot:itop])
     
     return downsample_matrix
+
+
+def ch_calc_threshold(threshold_args):
+    '''Function to return a function handle for calculating the threshold on chunked dask arrays
+
+    NOTE: with map_overlap, the arguments should contain {drop_axis=1, new_axis=1} to ensure the correct dask array output shape
+
+    INPUTS:
+        threshold_args: dict
+            Dictionary containing the threshold arguments that would normally be passed into calc_threshold
+
+    OUTPUTS:
+        tfunc: function handle
+            Function handle for calc_threhsold that can be used in dask.array.overlap.map_overlap
+    '''
+    def tfunc(ch_density, ch_mask):
+        return calc_threshold(ch_density, ch_mask, **threshold_args, verbose=False)
+    return tfunc

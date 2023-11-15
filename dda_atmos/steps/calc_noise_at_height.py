@@ -84,7 +84,32 @@ def calc_noise_at_height(data, cloud_mask, heights, dem, altitude, quantile, inc
     return mean, sd
 
     
+def ch_calc_noise_at_height(heights, altitude, quantile, include_nans=False, smooth_bins=2):
+    '''Function to return a handle that can be used on dask chunked arrays.
     
+    INPUTS:
+        heights : np.ndarray
+            (m,) numpy array conatining the height values for the vertical bins.
+
+        altitude : float
+            Altitude in meters above which data will be considered to be noisy
+
+        quantile : float
+            Quantile value given in threshold_args2. This is used to ensure that the noise shouldn't pollute the threshold calculation if signal exists, but will reduce noise from being classified as signal.
+
+        include_nans : bool
+            Include np.nan values in the mean and standard deviation calculations as 0-values. If set to True, this will cause the mean and sd to be dramatically lower than they otherwise would be, due to the empty bins at the top of all profiles.
+
+        smooth_bins : int
+            Number of profiles either side of a given profile over which a rolling average of mean and sd values are taken.
+    
+    OUTPUTS:
+        tfunc: function handle
+            Function handle to be passed to dask.array.overlap.map_overlap
+    '''
+    def tfunc(ch_data, ch_cloud_mask, ch_dem):
+        return calc_noise_at_height(ch_data, ch_cloud_mask, heights, ch_dem, altitude, quantile, include_nans, smooth_bins, verbose=False)
+    return tfunc
 
 
 

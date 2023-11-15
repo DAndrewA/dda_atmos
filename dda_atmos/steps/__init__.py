@@ -14,3 +14,16 @@ from .remove_ground_from_mask import remove_ground_from_mask
 from .calc_noise_at_height import calc_noise_at_height
 from .replace_mask_with_noise import replace_mask_with_noise
 #from .run_pass import run_pass
+
+
+# dask function handle generators
+from .calc_cloud_mask import ch_calc_cloud_mask
+from .calc_density import ch_calc_density
+from .calc_threshold import ch_calc_threshold
+from .combine_layers_from_mask import ch_combine_layers_from_mask
+from .combine_masks import ch_combine_masks
+#from .get_ground_bin import get_ground_bin
+from .get_layer_boundaries import ch_get_layer_boundaries
+#from .remove_ground_from_mask import remove_ground_from_mask
+from .calc_noise_at_height import ch_calc_noise_at_height
+from .replace_mask_with_noise import ch_replace_mask_with_noise

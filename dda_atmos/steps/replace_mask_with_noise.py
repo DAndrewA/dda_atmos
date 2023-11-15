@@ -50,3 +50,22 @@ def replace_mask_with_noise(data, mask, mean, sd, vmin=0, seed=None, verbose=Fal
     noisy_data[mask] = noise[mask]
 
     return noisy_data
+
+
+def ch_replace_mask_with_noise(vmin=0, seed=None):
+    '''Function to replace mask with noisy values for chunked dask arrays.
+    
+    INPUTS:
+        vmin: float
+            Minimum value that the returned data will contain. This accounts for the fact that some noise values could fall below a physical threshold (i.e. 0).
+
+        seed: None, int
+            Value used to initialise the scipy.stats.rv_continuous.random_state object. None will result in randomness on each run, whereas a provided number will seed the random algorithm.
+
+    OUTPUTS:
+        tfunc: function handle
+            Function handle to be passed to dask.array.map_blocks
+    '''
+    def tfunc(ch_data, ch_mask, ch_mean, ch_sd):
+        return replace_mask_with_noise(ch_data, ch_mask, ch_mean, ch_sd, vmin, seed, verbose=False)
+    return tfunc

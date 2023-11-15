@@ -27,7 +27,7 @@ def calc_density(data, data_mask, kernal, density_args, verbose=False):
         density : np.ndarray
             nxm numpy array containing the density field of data.
     '''
-    print('==== dda.steps.calc_density()')
+    if verbose: print('==== dda.steps.calc_density()')
     density = convolve_masked(data, data_mask, kernal, **density_args)
     return density
 
@@ -69,3 +69,22 @@ def convolve_masked(data, mask, kernal, **kwargs):
     # normalise density field
     density[norm>0] = density[norm>0] / norm[norm>0]
     return density
+
+
+def ch_calc_density(kernal, density_args):
+    '''Function that returns function handle for calculating the density field on chunked dask arrays
+    
+    INPUTS:
+        kernal : np.ndarray
+            jxk numpy array (smaller than data) that defines the kernal the data is convolved by in the density field caluclation.
+
+        density_args: dictionary
+            dictionary containing additional arguments for the calculation of the density field, namely, the other arguments in scipy.signal.convolve2d.
+
+    OUTPUTS:
+        tfunc: function handle
+            Function handle to be passed to dask.array.overlap.map_overlap()
+    '''
+    def tfunc(ch_data, ch_mask):
+        return calc_density(ch_data, ch_mask, kernal, density_args, verbose=False)
+    return tfunc

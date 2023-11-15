@@ -87,3 +87,27 @@ def get_layer_boundaries(layer_mask, heights, n_layers=10, top_down=True, verbos
         layer_bot, layer_top = layer_top, layer_bot # swap the labelling of the variables as bottom_up counting will find cloud bottoms first rather than cloud tops.
         if verbose: print(f'Swapped layer_bot and layer_top because {top_down=}.')
     return num_cloud_layers, layer_bot, layer_top
+
+
+def ch_get_layer_boundaries(heights, n_layers=10, top_down=True):
+    '''Function to return the function handle to calculate the layer boundaries on chunked dask arrays
+    
+    NOTE: untested: map_blocks should have the arguments {drop_axis=1, new_axis=1} to ensure the correct dask array output shape
+            
+    INPUTS:
+        heights : np.ndarray
+            (m,) numpy array of the vertical height coordinates associated with each pixel. They should be ordered, either ascending or descending, but CANNOT be unordered.
+
+        n_layers : int
+            The maximum number of cloud layers to keep track of. The default for ATL09 is 10.
+
+        top_down : bool
+            Flag for whether to perform the layer assignment from the top-down or bottom-up.
+
+    OUTPUTS:
+        tfunc: function handle
+            Function handle to be passed to dask.array.map_blocks
+    '''
+    def tfunc(ch_layer_mask):
+        return get_layer_boundaries(ch_layer_mask, heights, n_layers, top_down, verbose=False)
+    return tfunc
